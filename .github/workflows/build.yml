@@ -1,0 +1,108 @@
+name: build
+on:
+  push:
+    branches: [ main, develop, gh-build ]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: ${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  full-build:
+    runs-on: ubuntu-latest
+    container: 
+      image: sphinxdoc/sphinx
+      #options: --user 1001 (only if we don't need apt-get)
+    env:
+      MAIN_LANGS: en
+      OTHER_LANGS: es fr ru nl it ja el bg da et fi lv lt pl pt ro sv sk sl cs hu zh_CN
+    
+    steps:
+      - name: Install git
+        run: |
+          apt-get -y update
+          apt-get -y install git
+               
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: additional python packages
+        run: pip3 install -r requirements.txt
+          
+      - name: quick build docs
+        run: |
+          mkdir -p dist/en
+          mkdir -p build/en/doctrees
+          sphinx-build -j auto -b html -D language=en -d build/en/doctrees source dist/en
+
+      - name: upload quick build artifact 
+        id: upload-quick
+        uses: actions/upload-artifact@v4
+        with:
+          name: generated documentation (en)
+          path: dist
+
+      - name: TODO - trigger script on server to download artifact
+        run: echo 'Artifact URL is ${{ steps.upload-quick.outputs.artifact-url }}'
+
+      - name: build pot files
+        run: sphinx-build -b gettext source locales/
+
+      - name: build po files from pot files
+        shell: bash
+        run: |
+          lang=($OTHER_LANGS)
+          sphinx-intl update -p locales/ ${lang[@]/*/'-l '&' '}
+
+      - name: prepare commit into self
+        run: |
+          cp -r locales locales.full
+          rm -rf locales/.doctrees
+
+      - name: commit `locales` into repository (on changes)
+        shell: bash
+        run: |
+          # not needed if run on --user 1001
+          git config --global --add safe.directory $(pwd)
+          git config --global user.name "GitHub Action"
+          git config --global user.email "gh-action@noreply.gh.com"
+          if (git commit -m "Automated locales generation" locales); then
+            git push          
+          fi
+
+      - name: put original `locales` back
+        run: |
+          rm -rf locales
+          cp -r locales.full locales
+
+      - name: TODO - weblate
+        run: |
+          echo "trigger pull"
+          echo "trigger deepl"
+          echo "trigger commit"
+          echo "trigger push"
+
+      - name: build full docs
+        run: |
+          cp -r locales source/locales
+          for lang in $MAIN_LANGS $OTHER_LANGS
+          do
+            mkdir -p dist/$lang
+            mkdir -p build/$lang/doctrees
+            sphinx-build -j auto -b html -D language=$lang -d build/$lang/doctrees source dist/$lang
+          done
+
+      - name: upload full build artifact
+        id: upload-full
+        uses: actions/upload-artifact@v4
+        with:
+          name: generated documentation (all)
+          path: dist
+
+      - name: TODO - trigger script on server to download FULL artifact
+        run: echo 'Artifact URL is ${{ steps.upload-full.outputs.artifact-url }}'
+
+ 

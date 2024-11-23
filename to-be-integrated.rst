@@ -2,6 +2,7 @@
 
 
 
+
 PKCS#11 Driver
 
 If you want to use S/MIME email encryption with Thunderbird, to use TrueCrypt/VeraCrypt, certificate-based SSL authentication with Firefox, PuTTY/KiTTY, OpenSSH, OpenSSL, or any other PKCS#11 compatible software, you should install OpenSC.
